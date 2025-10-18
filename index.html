@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title> Let's Guess </title> 
+  <link rel="shortcut icon" href="img/logo.png" type="image/x-icon">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* small custom styles to complement Tailwind */
+    .option-btn:focus { outline: 3px solid rgba(59,130,246,0.3); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex items-center justify-center p-4">
+  <main class="w-full max-w-3xl bg-white rounded-2xl shadow-lg p-6 md:p-10">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-xl md:text-2xl font-semibold">Quick Quiz</h1>
+      <div class="text-sm text-slate-500">Progress: <span id="progressText">0 / 0</span></div>
+    </header>
+
+    <div id="quizWrap" class="space-y-6">
+      <!-- Question card injected by JS -->
+    </div>
+
+    <div class="mt-4 flex items-center justify-between">
+      <div class="flex gap-2">
+        <button id="prevBtn" class="px-4 py-2 rounded-lg border disabled:opacity-50">Previous</button>
+        <button id="nextBtn" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Next</button>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="restartBtn" class="px-3 py-2 text-sm rounded-lg border">Restart</button>
+        <div class="text-sm text-slate-500">Time: <span id="timer">00:00</span></div>
+      </div>
+    </div>
+
+    <!-- Results modal / card -->
+    <div id="resultCard" class="mt-6 hidden bg-emerald-50 border-l-4 border-emerald-400 p-4 rounded">
+      <h2 class="text-lg font-semibold">Results</h2>
+      <p class="mt-2">Score: <strong id="scoreText">0</strong></p>
+      <div id="feedback" class="mt-3 text-sm text-slate-700"></div>
+    </div>
+
+  </main>
+
+  <script>
+    // Sample quiz data — replace or extend as needed
+    const quiz = [
+      {
+        id: 1,
+        q: "Which planet is known as the Red Planet?",
+        options: ["Earth", "Mars", "Jupiter", "Venus"],
+        answer: 1
+      },
+      {
+        id: 2,
+        q: "What is the capital of Japan?",
+        options: ["Seoul", "Tokyo", "Kyoto", "Osaka"],
+        answer: 1
+      },
+      {
+        id: 3,
+        q: "Which language runs in a web browser?",
+        options: ["Python", "C++", "JavaScript", "Java"],
+        answer: 2
+      },
+      {
+        id: 4,
+        q: "What does CSS stand for?",
+        options: ["Cascading Style Sheets", "Computer Style Sheets", "Creative Style System", "Colorful Style Sheet"],
+        answer: 0
+      }
+    ];
+
+    // State
+    let current = 0;
+    const answers = new Array(quiz.length).fill(null);
+    let secondsElapsed = 0;
+    let timerInterval = null;
+
+    // DOM
+    const quizWrap = document.getElementById('quizWrap');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const progressText = document.getElementById('progressText');
+    const timerEl = document.getElementById('timer');
+    const resultCard = document.getElementById('resultCard');
+    const scoreText = document.getElementById('scoreText');
+    const feedback = document.getElementById('feedback');
+
+    function startTimer(){
+      clearInterval(timerInterval);
+      secondsElapsed = 0;
+      timerEl.textContent = formatTime(secondsElapsed);
+      timerInterval = setInterval(()=>{
+        secondsElapsed++;
+        timerEl.textContent = formatTime(secondsElapsed);
+      }, 1000);
+    }
+    function stopTimer(){ clearInterval(timerInterval); }
+    function formatTime(s){
+      const mm = String(Math.floor(s/60)).padStart(2,'0');
+      const ss = String(s%60).padStart(2,'0');
+      return `${mm}:${ss}`;
+    }
+
+    function render(){
+      // accessibility: announce changes to screen-readers could be added
+      quizWrap.innerHTML = '';
+      const item = quiz[current];
+
+      const card = document.createElement('section');
+      card.className = 'w-full';
+
+      const qHead = document.createElement('div');
+      qHead.className = 'mb-3 flex items-start justify-between gap-4';
+      qHead.innerHTML = `\n        <div class="flex-1">\n          <h2 class=\"text-lg font-medium\">Question ${current + 1}</h2>\n          <p class=\"mt-1 text-slate-600\">${escapeHtml(item.q)}</p>\n        </div>\n        <div class=\"text-sm text-slate-500\">${current + 1} / ${quiz.length}</div>\n      `;
+
+      card.appendChild(qHead);
+
+      const list = document.createElement('div');
+      list.className = 'grid gap-3 sm:grid-cols-2';
+
+      item.options.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'option-btn text-left p-3 rounded-lg border hover:shadow-sm focus:ring-2';
+        btn.setAttribute('data-idx', idx);
+        btn.setAttribute('aria-pressed', answers[current] === idx ? 'true' : 'false');
+        btn.innerHTML = `<div class=\"font-medium\">${String.fromCharCode(65 + idx)}. ${escapeHtml(opt)}</div>`;
+
+        // selected styling
+        if (answers[current] === idx) {
+          btn.classList.add('bg-indigo-50','border-indigo-300');
+        } else {
+          btn.classList.add('bg-white','border-slate-200');
+        }
+
+        btn.addEventListener('click', () => {
+          answers[current] = idx;
+          // re-render to update selected style
+          render();
+        });
+
+        // keyboard support: Enter/Space will trigger
+        btn.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            btn.click();
+          }
+        });
+
+        list.appendChild(btn);
+      });
+
+      card.appendChild(list);
+
+      // optional hint / footnote placeholder
+      const foot = document.createElement('div');
+      foot.className = 'mt-3 text-sm text-slate-500';
+      foot.textContent = '';
+      card.appendChild(foot);
+
+      quizWrap.appendChild(card);
+
+      // Update buttons and progress
+      prevBtn.disabled = current === 0;
+      nextBtn.textContent = current === quiz.length - 1 ? 'Submit' : 'Next';
+      progressText.textContent = `${answers.filter(a => a !== null).length} / ${quiz.length}`;
+
+      // hide results when navigating
+      resultCard.classList.add('hidden');
+    }
+
+    prevBtn.addEventListener('click', () => {
+      if (current > 0) current--;
+      render();
+    });
+
+    nextBtn.addEventListener('click', () => {
+      if (current < quiz.length - 1) {
+        current++;
+        render();
+        return;
+      }
+
+      // If last slide: submit
+      submitQuiz();
+    });
+
+    restartBtn.addEventListener('click', () => {
+      if (!confirm('Restart the quiz? Your answers will be cleared.')) return;
+      for (let i = 0; i < answers.length; i++) answers[i] = null;
+      current = 0;
+      startTimer();
+      render();
+    });
+
+    function submitQuiz(){
+      stopTimer();
+      // calculate score
+      let correct = 0;
+      const details = [];
+      quiz.forEach((q,i)=>{
+        const chosen = answers[i];
+        const isCorrect = chosen === q.answer;
+        if (isCorrect) correct++;
+        details.push({q: q.q, chosen, correct: isCorrect, right: q.answer});
+      });
+
+      scoreText.textContent = `${correct} / ${quiz.length}`;
+
+      // feedback
+      const pct = Math.round((correct / quiz.length) * 100);
+      let msg = '';
+      if (pct === 100) msg = 'Perfect — Nicely done!';
+      else if (pct >= 75) msg = 'Great job — a strong performance.';
+      else if (pct >= 50) msg = 'Not bad — a little more study and you\'ll be there.';
+      else msg = 'Keep practicing — review the material and try again.';
+
+      // build brief per-question feedback (keeps it short for UX)
+      const short = details.map((d, i) => `Q${i+1}: ${d.correct ? '✔' : `✖ (correct: ${String.fromCharCode(65 + d.right)})`}`).join('\n');
+      feedback.innerText = `${msg}\n\n${short}`;
+
+      resultCard.classList.remove('hidden');
+
+      // accessibility: focus results
+      resultCard.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+
+    function escapeHtml(unsafe) {
+      return unsafe
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    // init
+    (function init(){
+      // guard: if quiz empty
+      if (!quiz || quiz.length === 0) {
+        quizWrap.innerHTML = '<p class="text-center py-8">No questions available.</p>';
+        prevBtn.disabled = true; nextBtn.disabled = true;
+        return;
+      }
+      startTimer();
+      render();
+
+      // responsive: allow swipe gestures on mobile to navigate
+      let touchStartX = 0;
+      let touchEndX = 0;
+      quizWrap.addEventListener('touchstart', (e)=>{ touchStartX = e.changedTouches[0].screenX; });
+      quizWrap.addEventListener('touchend', (e)=>{ touchEndX = e.changedTouches[0].screenX; handleGesture(); });
+      function handleGesture(){
+        if (touchEndX + 40 < touchStartX) { // left swipe -> next
+          nextBtn.click();
+        }
+        if (touchEndX - 40 > touchStartX) { // right swipe -> prev
+          prevBtn.click();
+        }
+      }
+
+      // keyboard shortcuts
+      window.addEventListener('keydown', (e)=>{
+        if (e.key === 'ArrowRight') nextBtn.click();
+        if (e.key === 'ArrowLeft') prevBtn.click();
+      });
+
+    })();
+
+  </script>
+</body>
+</html>
