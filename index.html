@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title> Let's Guess </title>
+  <link rel="shortcut icon" href="img/logo.png" type="image/x-icon">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* small custom styles to complement Tailwind */
+    .option-btn:focus { outline: 3px solid rgba(59,130,246,0.3); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex items-center justify-center p-4">
+  <main class="w-full max-w-3xl bg-white rounded-2xl shadow-lg p-6 md:p-10">
+    <header class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-xl md:text-2xl font-semibold">Tech Quiz</h1>
+        <p id="topicLabel" class="text-sm text-slate-500 mt-1">Choose a topic</p>
+      </div>
+      <div class="text-sm text-slate-500">Progress: <span id="progressText">0 / 0</span></div>
+    </header>
+
+    <div id="quizWrap" class="space-y-6">
+      <!-- Topic picker or question card injected by JS -->
+    </div>
+
+    <div id="quizControls" class="mt-4 hidden items-center justify-between">
+      <div class="flex gap-2">
+        <button id="prevBtn" class="px-4 py-2 rounded-lg border disabled:opacity-50">Previous</button>
+        <button id="nextBtn" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Next</button>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="restartBtn" class="px-3 py-2 text-sm rounded-lg border">Restart</button>
+        <div class="text-sm text-slate-500">Time: <span id="timer">00:00</span></div>
+      </div>
+    </div>
+
+    <!-- Results modal / card -->
+    <div id="resultCard" class="mt-6 hidden bg-emerald-50 border-l-4 border-emerald-400 p-4 rounded">
+      <h2 class="text-lg font-semibold">Results</h2>
+      <p class="mt-2">Score: <strong id="scoreText">0</strong></p>
+      <p id="feedback" class="mt-3 text-sm text-slate-700"></p>
+      <div class="mt-4">
+        <h3 class="text-sm font-semibold text-slate-800">Question feedback</h3>
+        <ul id="questionFeedback" class="mt-2 space-y-2 text-sm text-slate-700"></ul>
+      </div>
+      <div class="mt-4">
+        <h3 class="text-sm font-semibold text-slate-800">Recommendations</h3>
+        <ul id="recommendations" class="mt-2 space-y-2 text-sm text-slate-700"></ul>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    function createImageQuestions(kind, entries) {
+      return entries.map(([name, imageId, options], index) => ({
+        id: index + 1,
+        q: `Which ${kind === 'hardware' ? 'hardware component' : 'software application'} is shown?`,
+        options,
+        answer: options.indexOf(name),
+        topic: kind === 'hardware' ? 'Hardware components' : 'Software applications',
+        image: {
+          src: `img/${kind}/${imageId}.${kind === 'hardware' ? 'jpg' : 'svg'}`,
+          alt: kind === 'hardware' ? 'Photograph of a computer hardware component' : 'Application logo'
+        }
+      }));
+    }
+
+    const topics = {
+      software: {
+        name: "Software",
+        blurb: "Languages, the web, Git, APIs, and tools you use to build programs.",
+        nextStep: "Keep building: try a small project that uses Git, a REST API, and a React UI together.",
+        questions: [
+          {
+            id: 1,
+            q: "Which language runs in a web browser?",
+            options: ["Python", "C++", "JavaScript", "Java"],
+            answer: 2,
+            topic: "JavaScript"
+          },
+          {
+            id: 2,
+            q: "What does CSS stand for?",
+            options: ["Cascading Style Sheets", "Computer Style Sheets", "Creative Style System", "Colorful Style Sheet"],
+            answer: 0,
+            topic: "CSS"
+          },
+          {
+            id: 3,
+            q: "Which HTTP status code means a resource was not found?",
+            options: ["200", "301", "404", "500"],
+            answer: 2,
+            topic: "HTTP"
+          },
+          {
+            id: 4,
+            q: "What does Git help you do?",
+            options: ["Design user interfaces", "Track changes in source code", "Compile programs faster", "Host websites automatically"],
+            answer: 1,
+            topic: "Git"
+          },
+          {
+            id: 5,
+            q: "Which of these is a NoSQL database?",
+            options: ["PostgreSQL", "MySQL", "MongoDB", "SQLite"],
+            answer: 2,
+            topic: "Databases"
+          },
+          {
+            id: 6,
+            q: "What does API stand for?",
+            options: ["Application Programming Interface", "Advanced Program Integration", "Automated Process Instruction", "Applied Protocol Internet"],
+            answer: 0,
+            topic: "APIs"
+          },
+          {
+            id: 7,
+            q: "Which command lists files in a Unix/Linux terminal?",
+            options: ["cd", "ls", "pwd", "mv"],
+            answer: 1,
+            topic: "Command line"
+          },
+          {
+            id: 8,
+            q: "In React, what is used to pass data from a parent to a child component?",
+            options: ["State", "Hooks", "Props", "Reducers"],
+            answer: 2,
+            topic: "React"
+          },
+          {
+            id: 9,
+            q: "What does HTML stand for?",
+            options: ["HyperText Markup Language", "High-Level Text Management Language", "Hyperlink and Text Markup Library", "Home Tool Markup Language"],
+            answer: 0,
+            topic: "HTML"
+          },
+          {
+            id: 10,
+            q: "Which data format is commonly used in REST APIs?",
+            options: ["CSV", "JSON", "MP3", "JPEG"],
+            answer: 1,
+            topic: "APIs"
+          }
+        ]
+      },
+      hardware: {
+        name: "Hardware",
+        blurb: "Physical computer parts: CPU, memory, storage, ports, and peripherals.",
+        nextStep: "Open a desktop or laptop diagram and label the CPU, RAM, storage, GPU, and motherboard. Then compare SSD vs HDD and RAM vs storage.",
+        questions: [
+          {
+            id: 1,
+            q: "Which component is often called the brain of a computer?",
+            options: ["RAM", "Hard drive", "CPU", "Power supply"],
+            answer: 2,
+            topic: "CPU"
+          },
+          {
+            id: 2,
+            q: "What does RAM stand for?",
+            options: ["Readily Available Memory", "Random Access Memory", "Read Archive Module", "Rapid Application Machine"],
+            answer: 1,
+            topic: "RAM"
+          },
+          {
+            id: 3,
+            q: "Which storage type is typically the fastest?",
+            options: ["Floppy disk", "HDD", "CD-ROM", "SSD"],
+            answer: 3,
+            topic: "Storage"
+          },
+          {
+            id: 4,
+            q: "What does GPU stand for?",
+            options: ["General Processing Utility", "Graphics Processing Unit", "Global Peripheral Unit", "Graphical Power USB"],
+            answer: 1,
+            topic: "GPU"
+          },
+          {
+            id: 5,
+            q: "What is a motherboard?",
+            options: ["The computer's main circuit board", "A type of monitor cable", "External backup storage", "The case fan controller only"],
+            answer: 0,
+            topic: "Motherboard"
+          },
+          {
+            id: 6,
+            q: "Which port is commonly used to connect a modern monitor?",
+            options: ["PS/2", "HDMI", "Parallel", "RJ11"],
+            answer: 1,
+            topic: "Ports"
+          },
+          {
+            id: 7,
+            q: "Which of these is an input device?",
+            options: ["Monitor", "Speaker", "Keyboard", "Projector"],
+            answer: 2,
+            topic: "Peripherals"
+          },
+          {
+            id: 8,
+            q: "What does CPU stand for?",
+            options: ["Central Processing Unit", "Computer Power Utility", "Core Program USB", "Central Peripheral Unit"],
+            answer: 0,
+            topic: "CPU"
+          },
+          {
+            id: 9,
+            q: "Which unit is commonly used for processor clock speed?",
+            options: ["Pixels", "Watts", "Gigahertz (GHz)", "Lumens"],
+            answer: 2,
+            topic: "CPU"
+          },
+          {
+            id: 10,
+            q: "What does SSD stand for?",
+            options: ["System Software Disk", "Solid State Drive", "Serial Storage Device", "Secure Server Drive"],
+            answer: 1,
+            topic: "Storage"
+          }
+        ]
+      },
+      hardwareImages: {
+        name: "Hardware components",
+        blurb: "Identify 20 computer parts and peripherals from real photographs.",
+        nextStep: "Review the components you missed and compare how they connect inside or outside a computer.",
+        questions: createImageQuestions("hardware", [
+          ["CPU", "cpu", ["CPU", "RAM", "GPU", "Power supply"]],
+          ["RAM", "ram", ["SSD", "RAM", "Motherboard", "CPU"]],
+          ["SSD", "ssd", ["Hard disk drive", "USB flash drive", "SSD", "GPU"]],
+          ["GPU", "gpu", ["GPU", "Network card", "CPU", "Sound card"]],
+          ["Motherboard", "motherboard", ["Power supply", "Motherboard", "RAM", "Cooling fan"]],
+          ["Power supply", "power", ["Cooling fan", "Battery", "Power supply", "Router"]],
+          ["Cooling fan", "fan", ["Hard disk drive", "Cooling fan", "CPU", "Speaker"]],
+          ["Computer case", "case", ["Monitor", "Computer case", "Printer", "Motherboard"]],
+          ["Monitor", "monitor", ["Projector", "Monitor", "Keyboard", "Webcam"]],
+          ["Keyboard", "keyboard", ["Keyboard", "Mouse", "Microphone", "Monitor"]],
+          ["Mouse", "mouse", ["Webcam", "Mouse", "Keyboard", "Router"]],
+          ["Webcam", "webcam", ["Speaker", "Scanner", "Webcam", "Microphone"]],
+          ["Microphone", "microphone", ["Headphones", "Microphone", "Webcam", "Printer"]],
+          ["Speakers", "speakers", ["Speakers", "Router", "Power supply", "Monitor"]],
+          ["Printer", "printer", ["Scanner", "Computer case", "Printer", "Projector"]],
+          ["Router", "router", ["Router", "GPU", "Modem cable", "SSD"]],
+          ["USB flash drive", "usb", ["RAM", "USB flash drive", "SSD", "Ethernet cable"]],
+          ["Ethernet cable", "ethernet", ["Power cord", "HDMI cable", "Ethernet cable", "Audio cable"]],
+          ["Battery", "battery", ["Power supply", "Battery", "Cooling fan", "Motherboard"]],
+          ["Server rack", "server-rack", ["Computer case", "Server rack", "Power supply", "Network switch"]]
+        ])
+      },
+      softwareImages: {
+        name: "Software applications",
+        blurb: "Recognize 20 popular applications from their official app logos.",
+        nextStep: "Explore the applications you missed and note what each one is designed to help you do.",
+        questions: createImageQuestions("software", [
+          ["Google Chrome", "chrome", ["Mozilla Firefox", "Google Chrome", "Microsoft Edge", "Safari"]],
+          ["Gmail", "gmail", ["Microsoft Outlook", "Gmail", "Google Drive", "Google Calendar"]],
+          ["Google Drive", "google-drive", ["Dropbox", "Google Drive", "OneDrive", "Google Photos"]],
+          ["Google Calendar", "google-calendar", ["Google Calendar", "Google Drive", "Google Photos", "Gmail"]],
+          ["Google Meet", "google-meet", ["Microsoft Teams", "Google Meet", "Zoom", "Google Calendar"]],
+          ["Google Maps", "google-maps", ["Google Maps", "Google Photos", "Google Drive", "Google Calendar"]],
+          ["Google Photos", "google-photos", ["Google Photos", "Google Maps", "Google Drive", "Gmail"]],
+          ["Microsoft Teams", "microsoft-teams", ["Slack", "Microsoft Teams", "Google Meet", "Zoom"]],
+          ["Microsoft Edge", "microsoft-edge", ["Google Chrome", "Mozilla Firefox", "Microsoft Edge", "Safari"]],
+          ["Microsoft OneDrive", "onedrive", ["Google Drive", "Dropbox", "Microsoft OneDrive", "Google Photos"]],
+          ["Microsoft Power BI", "power-bi", ["Microsoft Excel", "Tableau", "Microsoft Power BI", "Google Analytics"]],
+          ["Adobe Photoshop", "photoshop", ["Adobe Illustrator", "Adobe Photoshop", "Adobe Lightroom", "Adobe XD"]],
+          ["Adobe Illustrator", "illustrator", ["Adobe Photoshop", "Adobe Illustrator", "Adobe InDesign", "Adobe Premiere Pro"]],
+          ["Adobe Premiere Pro", "premiere", ["Adobe After Effects", "Adobe Premiere Pro", "Adobe Lightroom", "Adobe Photoshop"]],
+          ["Adobe InDesign", "indesign", ["Adobe Photoshop", "Adobe InDesign", "Adobe Illustrator", "Adobe Lightroom"]],
+          ["Adobe Lightroom", "lightroom", ["Adobe Photoshop", "Adobe Lightroom", "Adobe Premiere Pro", "Adobe XD"]],
+          ["Adobe XD", "adobe-xd", ["Adobe XD", "Adobe Photoshop", "Adobe Illustrator", "Adobe InDesign"]],
+          ["Visual Studio Code", "visual-studio-code", ["Visual Studio Code", "Visual Studio", "GitHub Desktop", "Notion"]],
+          ["Spotify", "spotify", ["Spotify", "YouTube Music", "Google Podcasts", "Apple Music"]],
+          ["Notion", "notion", ["Trello", "Notion", "Microsoft Word", "Google Docs"]]
+        ])
+      },
+      networking: {
+        name: "Networking",
+        blurb: "How devices connect: IP, DNS, Wi-Fi, routers, and common network types.",
+        nextStep: "Sketch a home network: modem, router, Wi-Fi, and a few devices. Label IP, DNS, and LAN vs WAN.",
+        questions: [
+          {
+            id: 1,
+            q: "What does IP stand for in networking?",
+            options: ["Internet Protocol", "Internal Process", "Instant Packet", "Interface Port"],
+            answer: 0,
+            topic: "IP"
+          },
+          {
+            id: 2,
+            q: "What is the main job of a router?",
+            options: ["Print documents", "Forward traffic between networks", "Cool the CPU", "Store photos"],
+            answer: 1,
+            topic: "Routers"
+          },
+          {
+            id: 3,
+            q: "What does LAN stand for?",
+            options: ["Large Access Node", "Local Area Network", "Logical Address Number", "Linked Application Network"],
+            answer: 1,
+            topic: "LAN/WAN"
+          },
+          {
+            id: 4,
+            q: "Which protocol is commonly used to load websites in a browser?",
+            options: ["FTP", "SMTP", "HTTP", "SSH"],
+            answer: 2,
+            topic: "Protocols"
+          },
+          {
+            id: 5,
+            q: "What does DNS do?",
+            options: ["Converts domain names into IP addresses", "Charges batteries", "Compresses images", "Blocks all Wi-Fi"],
+            answer: 0,
+            topic: "DNS"
+          },
+          {
+            id: 6,
+            q: "Which device typically provides Wi-Fi to phones and laptops at home?",
+            options: ["Monitor", "Wireless router or access point", "GPU", "Scanner"],
+            answer: 1,
+            topic: "Wi-Fi"
+          },
+          {
+            id: 7,
+            q: "What is a MAC address?",
+            options: ["A computer's hardware network identifier", "A type of password manager", "A cloud storage plan", "A programming language"],
+            answer: 0,
+            topic: "Addresses"
+          },
+          {
+            id: 8,
+            q: "Which cable is commonly used for wired Ethernet?",
+            options: ["HDMI", "RJ45 / Ethernet cable", "VGA", "Power cord only"],
+            answer: 1,
+            topic: "Cables"
+          },
+          {
+            id: 9,
+            q: "What does WAN usually describe?",
+            options: ["A network covering a large geographic area", "A single USB stick", "A laptop battery", "A type of keyboard"],
+            answer: 0,
+            topic: "LAN/WAN"
+          },
+          {
+            id: 10,
+            q: "Which port number is commonly used for HTTPS?",
+            options: ["21", "25", "80", "443"],
+            answer: 3,
+            topic: "Protocols"
+          }
+        ]
+      },
+      cybersecurity: {
+        name: "Cybersecurity",
+        blurb: "Protecting accounts and systems: passwords, phishing, malware, and 2FA.",
+        nextStep: "Turn on two-factor authentication for email, use a password manager, and practice spotting phishing emails.",
+        questions: [
+          {
+            id: 1,
+            q: "What is phishing?",
+            options: ["A way to speed up Wi-Fi", "A trick that tries to steal information, often by email", "A type of computer fan", "A backup hard drive"],
+            answer: 1,
+            topic: "Phishing"
+          },
+          {
+            id: 2,
+            q: "What does 2FA (two-factor authentication) add?",
+            options: ["A second proof of identity besides a password", "A second monitor", "Two copies of every file", "Faster downloads"],
+            answer: 0,
+            topic: "Authentication"
+          },
+          {
+            id: 3,
+            q: "Which of these is the strongest password practice?",
+            options: ["Reuse one short password everywhere", "Use a long unique password or a password manager", "Share passwords in a group chat", "Write the password in the email subject"],
+            answer: 1,
+            topic: "Passwords"
+          },
+          {
+            id: 4,
+            q: "What is malware?",
+            options: ["Software designed to harm or sneak onto a system", "A type of printer ink", "A network cable", "A computer case color"],
+            answer: 0,
+            topic: "Malware"
+          },
+          {
+            id: 5,
+            q: "What should you do with unexpected email attachments from unknown senders?",
+            options: ["Open them immediately", "Forward them to everyone", "Avoid opening them and report if suspicious", "Reply with your password"],
+            answer: 2,
+            topic: "Phishing"
+          },
+          {
+            id: 6,
+            q: "What does HTTPS in a URL indicate?",
+            options: ["The page cannot contain images", "The connection is encrypted", "The site is always free", "The site is offline"],
+            answer: 1,
+            topic: "Encryption"
+          },
+          {
+            id: 7,
+            q: "What is a firewall used for?",
+            options: ["Cooling the CPU", "Filtering network traffic based on rules", "Increasing screen brightness", "Charging a laptop"],
+            answer: 1,
+            topic: "Firewalls"
+          },
+          {
+            id: 8,
+            q: "What is ransomware?",
+            options: ["Malware that locks data and demands payment", "A free antivirus trial", "A type of RAM", "A Wi-Fi channel"],
+            answer: 0,
+            topic: "Malware"
+          },
+          {
+            id: 9,
+            q: "Why are software updates important for security?",
+            options: ["They only change app colors", "They often patch known vulnerabilities", "They delete all passwords", "They turn off the internet"],
+            answer: 1,
+            topic: "Updates"
+          },
+          {
+            id: 10,
+            q: "What is the principle of least privilege?",
+            options: ["Give users only the access they need to do their job", "Give everyone admin rights", "Never use passwords", "Share one account as a team"],
+            answer: 0,
+            topic: "Access control"
+          }
+        ]
+      },
+      datacenter: {
+        name: "Datacenter operations",
+        blurb: "How datacenters run: servers, power, cooling, racks, and uptime.",
+        nextStep: "Tour a datacenter diagram: racks, servers, cooling, UPS, and redundant power. Note why uptime and physical security matter.",
+        questions: [
+          {
+            id: 1,
+            q: "What is a datacenter primarily used for?",
+            options: ["Housing servers and related IT equipment", "Selling laptops in a store", "Printing newspapers", "Repairing car engines"],
+            answer: 0,
+            topic: "Facilities"
+          },
+          {
+            id: 2,
+            q: "Why is cooling important in a datacenter?",
+            options: ["Servers produce heat and can fail if too hot", "It makes Wi-Fi faster", "It charges batteries", "It replaces backup power"],
+            answer: 0,
+            topic: "Cooling"
+          },
+          {
+            id: 3,
+            q: "What does UPS typically provide in a datacenter?",
+            options: ["Short-term backup power during an outage", "Faster graphics for games", "A type of Ethernet cable", "User passwords"],
+            answer: 0,
+            topic: "Power"
+          },
+          {
+            id: 4,
+            q: "What is a server rack used for?",
+            options: ["Organizing and mounting servers and network gear", "Storing office chairs", "Cooling only the building lobby", "Shipping packages"],
+            answer: 0,
+            topic: "Racks"
+          },
+          {
+            id: 5,
+            q: "What does redundancy mean in datacenter operations?",
+            options: ["Extra systems so one failure does not stop service", "Deleting unused files twice", "Using only one power cable", "Turning servers off at night"],
+            answer: 0,
+            topic: "Reliability"
+          },
+          {
+            id: 6,
+            q: "What is uptime?",
+            options: ["How long a system stays available and running", "How fast a GPU renders video", "The height of a rack", "The time staff arrive at work"],
+            answer: 0,
+            topic: "Reliability"
+          },
+          {
+            id: 7,
+            q: "Which is a common physical security control in a datacenter?",
+            options: ["Badge access and cameras", "Leaving doors propped open", "Public Wi-Fi in every aisle", "Shared visitor passwords posted on racks"],
+            answer: 0,
+            topic: "Physical security"
+          },
+          {
+            id: 8,
+            q: "What is a PDU in a datacenter?",
+            options: ["Power Distribution Unit", "Personal Data USB", "Primary Disk Utility", "Packet Drawing Update"],
+            answer: 0,
+            topic: "Power"
+          },
+          {
+            id: 9,
+            q: "What is a common reason datacenters use raised floors or hot/cold aisles?",
+            options: ["To manage airflow and cooling", "To hide unused laptops", "To increase screen resolution", "To replace DNS"],
+            answer: 0,
+            topic: "Cooling"
+          },
+          {
+            id: 10,
+            q: "What is a runbook in operations?",
+            options: ["A documented procedure for handling a task or incident", "A novel about computers", "A type of cooling fan", "A brand of server case"],
+            answer: 0,
+            topic: "Operations"
+          }
+        ]
+      },
+      ai: {
+        name: "AI basics",
+        blurb: "Core ideas: machine learning, training data, models, and common AI uses.",
+        nextStep: "Pick one everyday AI tool (search, maps, or a chatbot). Write what data it might learn from and one risk if that data is biased or private.",
+        questions: [
+          {
+            id: 1,
+            q: "What does AI commonly stand for?",
+            options: ["Artificial Intelligence", "Automatic Internet", "Applied Inventory", "Analog Input"],
+            answer: 0,
+            topic: "AI concepts"
+          },
+          {
+            id: 2,
+            q: "What is machine learning?",
+            options: ["A system that improves from data and examples", "A way to plug in extra RAM", "A type of Ethernet switch", "Hand-writing every rule for a calculator"],
+            answer: 0,
+            topic: "Machine learning"
+          },
+          {
+            id: 3,
+            q: "What is training data used for?",
+            options: ["Teaching a model patterns before it is used", "Cooling a datacenter", "Naming Wi-Fi networks", "Formatting a hard drive"],
+            answer: 0,
+            topic: "Training data"
+          },
+          {
+            id: 4,
+            q: "What is a model in machine learning?",
+            options: ["A program that has learned patterns from data", "A 3D printer", "A physical server rack", "A password policy"],
+            answer: 0,
+            topic: "Models"
+          },
+          {
+            id: 5,
+            q: "What does NLP stand for?",
+            options: ["Natural Language Processing", "Network Latency Protocol", "New Laptop Product", "Numeric Logic Port"],
+            answer: 0,
+            topic: "NLP"
+          },
+          {
+            id: 6,
+            q: "Which task is a common use of computer vision?",
+            options: ["Identifying objects in photos", "Routing Ethernet cables", "Compiling C++", "Charging a phone"],
+            answer: 0,
+            topic: "Computer vision"
+          },
+          {
+            id: 7,
+            q: "What is a prompt when using a chatbot?",
+            options: ["The instruction or question you give the model", "The model's power cable", "A type of GPU fan", "A firewall rule"],
+            answer: 0,
+            topic: "Generative AI"
+          },
+          {
+            id: 8,
+            q: "Why can biased training data be a problem?",
+            options: ["The model may repeat unfair or skewed patterns", "The computer will not turn on", "Wi-Fi will stop working", "RAM cannot be installed"],
+            answer: 0,
+            topic: "Ethics"
+          },
+          {
+            id: 9,
+            q: "What is overfitting?",
+            options: ["A model memorizes training examples and fails on new data", "A server rack that is too tall", "A password that is too long", "A cable that is too short"],
+            answer: 0,
+            topic: "Machine learning"
+          },
+          {
+            id: 10,
+            q: "Which of these is a generative AI system most likely to do?",
+            options: ["Create new text, images, or code from a prompt", "Replace a motherboard", "Assign MAC addresses", "Cool a CPU with liquid"],
+            answer: 0,
+            topic: "Generative AI"
+          }
+        ]
+      }
+    };
+
+    const studyNotes = {
+      JavaScript: "Review how browsers execute JavaScript, and how it differs from languages that run on a server or as compiled apps.",
+      CSS: "Study the CSS cascade, specificity, and how style sheets control layout and appearance on the web.",
+      HTTP: "Learn the common HTTP status families: 2xx success, 3xx redirects, 4xx client errors, and 5xx server errors.",
+      Git: "Practice the Git basics: clone, status, add, commit, and how version control tracks a project over time.",
+      Databases: "Compare SQL databases (tables and rows) with NoSQL stores like MongoDB (documents and collections).",
+      APIs: "Read how APIs let programs talk to each other, especially REST endpoints that return JSON over HTTP.",
+      "Command line": "Practice everyday shell commands: ls, cd, pwd, and mv so you can move around a project from the terminal.",
+      React: "Review React component data flow: props go down from parent to child, while state stays local unless lifted up.",
+      HTML: "Review HTML structure: elements, tags, and how markup describes the content of a web page.",
+      CPU: "Learn what the CPU does, what clock speed (GHz) means, and how it differs from RAM and storage.",
+      RAM: "Study RAM as short-term working memory, and why more RAM helps with running many programs at once.",
+      Storage: "Compare HDD vs SSD: speed, moving parts, and how storage keeps files when the computer is off.",
+      GPU: "Review what a GPU does for graphics and why games and video work benefit from a dedicated graphics card.",
+      Motherboard: "Learn how the motherboard connects the CPU, RAM, storage, and expansion cards so they can work together.",
+      Ports: "Study common ports such as HDMI, USB, and audio jacks, and what kinds of devices plug into each.",
+      Peripherals: "Review input vs output devices: keyboard and mouse in, monitor and speakers out.",
+      IP: "Learn what an IP address identifies on a network and how IPv4 addresses look (for example 192.168.1.1).",
+      Routers: "Study how a router forwards packets between your home network and the internet.",
+      "LAN/WAN": "Compare a LAN (local, like a home or office) with a WAN (wide area, like the internet).",
+      Protocols: "Review common protocols and ports: HTTP (80), HTTPS (443), and why HTTPS is preferred.",
+      DNS: "Practice the idea that DNS turns names like example.com into IP addresses computers can route.",
+      "Wi-Fi": "Learn how a wireless router or access point lets devices join a LAN without Ethernet cables.",
+      Addresses: "Distinguish IP addresses (logical, can change) from MAC addresses (hardware identifiers).",
+      Cables: "Review Ethernet (RJ45) versus other cables like HDMI, and when wired networking is useful.",
+      Phishing: "Practice spotting fake emails and links that try to steal passwords or payment details.",
+      Authentication: "Learn why 2FA adds a second check, such as a phone code, on top of a password.",
+      Passwords: "Use long unique passwords and a password manager instead of reusing short phrases.",
+      Malware: "Review malware types, especially ransomware, and why backups and caution with files matter.",
+      Encryption: "Study HTTPS as encryption in transit so others on the network cannot easily read the traffic.",
+      Firewalls: "Learn that firewalls allow or block traffic based on rules to reduce unwanted access.",
+      Updates: "Keep software updated so known security holes are patched.",
+      "Access control": "Apply least privilege: only the permissions needed for the job, not full admin for everyone.",
+      Facilities: "Learn what a datacenter houses: servers, networking, power, and cooling in one facility.",
+      Cooling: "Study why heat removal, airflow, and hot/cold aisles keep servers from overheating.",
+      Power: "Review UPS and PDUs: backup power for short outages and how power is distributed to racks.",
+      Racks: "Learn how racks mount servers and switches in a standard, serviceable layout.",
+      Reliability: "Study redundancy and uptime: spare systems so one failure does not take everything down.",
+      "Physical security": "Review badge access, cameras, and why unauthorized people should not enter the floor.",
+      Operations: "Read what a runbook is: a step-by-step guide for routine work and incidents.",
+      "AI concepts": "Start with the idea that AI systems perform tasks that usually need human-like judgment or pattern spotting.",
+      "Machine learning": "Learn that models improve from examples, and watch for overfitting on the training set.",
+      "Training data": "Study how the quality and bias of training data shape what a model learns.",
+      Models: "Treat a model as the learned program that makes predictions or generates output.",
+      NLP: "Review natural language processing: AI that works with human language such as text and speech.",
+      "Computer vision": "Learn how models identify objects, faces, or text in images and video.",
+      "Generative AI": "Practice writing clear prompts and remember these systems create new content, not just classify it.",
+      Ethics: "Ask who is affected if training data is biased, private, or used without consent.",
+      "Hardware components": "Review the pictured parts and peripherals, then compare their roles and where they connect.",
+      "Software applications": "Review the pictured app icons and learn the main task each application is designed for."
+    };
+
+    // State
+    let selectedKey = null;
+    let quiz = [];
+    let current = 0;
+    let answers = [];
+    let secondsElapsed = 0;
+    let timerInterval = null;
+
+    // DOM
+    const quizWrap = document.getElementById('quizWrap');
+    const quizControls = document.getElementById('quizControls');
+    const topicLabel = document.getElementById('topicLabel');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const progressText = document.getElementById('progressText');
+    const timerEl = document.getElementById('timer');
+    const resultCard = document.getElementById('resultCard');
+    const scoreText = document.getElementById('scoreText');
+    const feedback = document.getElementById('feedback');
+    const questionFeedback = document.getElementById('questionFeedback');
+    const recommendations = document.getElementById('recommendations');
+
+    function startTimer(){
+      clearInterval(timerInterval);
+      secondsElapsed = 0;
+      timerEl.textContent = formatTime(secondsElapsed);
+      timerInterval = setInterval(()=>{
+        secondsElapsed++;
+        timerEl.textContent = formatTime(secondsElapsed);
+      }, 1000);
+    }
+    function stopTimer(){ clearInterval(timerInterval); }
+    function formatTime(s){
+      const mm = String(Math.floor(s/60)).padStart(2,'0');
+      const ss = String(s%60).padStart(2,'0');
+      return `${mm}:${ss}`;
+    }
+
+    function showTopicSelect(){
+      stopTimer();
+      selectedKey = null;
+      quiz = [];
+      answers = [];
+      current = 0;
+      topicLabel.textContent = 'Choose a topic';
+      progressText.textContent = '0 / 0';
+      timerEl.textContent = '00:00';
+      quizControls.classList.add('hidden');
+      quizControls.classList.remove('flex');
+      resultCard.classList.add('hidden');
+      quizWrap.innerHTML = '';
+
+      const intro = document.createElement('p');
+      intro.className = 'text-slate-600';
+      intro.textContent = 'Pick a quiz topic to get started.';
+      quizWrap.appendChild(intro);
+
+      const grid = document.createElement('div');
+      grid.className = 'grid gap-4 sm:grid-cols-2';
+
+      Object.entries(topics).forEach(([key, topic]) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'text-left p-5 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm focus:ring-2';
+        btn.innerHTML = `
+          <h2 class="text-lg font-semibold">${escapeHtml(topic.name)}</h2>
+          <p class="mt-2 text-sm text-slate-600">${escapeHtml(topic.blurb)}</p>
+          <p class="mt-3 text-sm font-medium text-indigo-600">${topic.questions.length} questions</p>
+        `;
+        btn.addEventListener('click', () => startQuiz(key));
+        grid.appendChild(btn);
+      });
+
+      quizWrap.appendChild(grid);
+    }
+
+    function startQuiz(key){
+      const topic = topics[key];
+      if (!topic || !topic.questions.length) return;
+      selectedKey = key;
+      quiz = topic.questions;
+      answers = new Array(quiz.length).fill(null);
+      current = 0;
+      topicLabel.textContent = topic.name;
+      quizControls.classList.remove('hidden');
+      quizControls.classList.add('flex');
+      startTimer();
+      render();
+    }
+
+    function render(){
+      if (!quiz.length) {
+        showTopicSelect();
+        return;
+      }
+
+      quizWrap.innerHTML = '';
+      const item = quiz[current];
+
+      const card = document.createElement('section');
+      card.className = 'w-full';
+
+      const qHead = document.createElement('div');
+      qHead.className = 'mb-3 flex items-start justify-between gap-4';
+      qHead.innerHTML = `\n        <div class="flex-1">\n          <h2 class=\"text-lg font-medium\">Question ${current + 1}</h2>\n          <p class=\"mt-1 text-slate-600\">${escapeHtml(item.q)}</p>\n        </div>\n        <div class=\"text-sm text-slate-500\">${current + 1} / ${quiz.length}</div>\n      `;
+
+      card.appendChild(qHead);
+
+      if (item.image) {
+        const image = document.createElement('img');
+        image.src = item.image.src;
+        image.alt = item.image.alt;
+        image.className = 'mx-auto mb-4 block h-48 w-full rounded-xl object-contain';
+        card.appendChild(image);
+      }
+
+      const list = document.createElement('div');
+      list.className = 'grid gap-3 sm:grid-cols-2';
+
+      item.options.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'option-btn text-left p-3 rounded-lg border hover:shadow-sm focus:ring-2';
+        btn.setAttribute('data-idx', idx);
+        btn.setAttribute('aria-pressed', answers[current] === idx ? 'true' : 'false');
+        btn.innerHTML = `<div class=\"font-medium\">${String.fromCharCode(65 + idx)}. ${escapeHtml(opt)}</div>`;
+
+        if (answers[current] === idx) {
+          btn.classList.add('bg-indigo-50','border-indigo-300');
+        } else {
+          btn.classList.add('bg-white','border-slate-200');
+        }
+
+        btn.addEventListener('click', () => {
+          answers[current] = idx;
+          render();
+        });
+
+        btn.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            btn.click();
+          }
+        });
+
+        list.appendChild(btn);
+      });
+
+      card.appendChild(list);
+      quizWrap.appendChild(card);
+
+      prevBtn.disabled = current === 0;
+      nextBtn.textContent = current === quiz.length - 1 ? 'Submit' : 'Next';
+      progressText.textContent = `${answers.filter(a => a !== null).length} / ${quiz.length}`;
+      resultCard.classList.add('hidden');
+    }
+
+    prevBtn.addEventListener('click', () => {
+      if (current > 0) current--;
+      render();
+    });
+
+    nextBtn.addEventListener('click', () => {
+      if (!quiz.length) return;
+      if (current < quiz.length - 1) {
+        current++;
+        render();
+        return;
+      }
+      submitQuiz();
+    });
+
+    restartBtn.addEventListener('click', () => {
+      if (!confirm('Restart? Your answers will be cleared and you can pick a topic again.')) return;
+      showTopicSelect();
+    });
+
+    function submitQuiz(){
+      stopTimer();
+      let correct = 0;
+      const details = [];
+      quiz.forEach((q, i) => {
+        const chosen = answers[i];
+        const isCorrect = chosen === q.answer;
+        if (isCorrect) correct++;
+        details.push({ item: q, chosen, isCorrect });
+      });
+
+      scoreText.textContent = `${correct} / ${quiz.length}`;
+
+      const pct = Math.round((correct / quiz.length) * 100);
+      let msg = '';
+      if (pct === 100) msg = `Perfect — you have a solid grasp of ${topics[selectedKey].name.toLowerCase()} basics.`;
+      else if (pct >= 75) msg = 'Strong result. A bit of review on the missed topics will get you to 100%.';
+      else if (pct >= 50) msg = 'You know some of the fundamentals. Focus on the recommendations below, then try again.';
+      else msg = 'Start with the topics you missed and retake the quiz when you are ready.';
+      feedback.textContent = msg;
+
+      questionFeedback.innerHTML = details.map((d, i) => {
+        const letter = (idx) => String.fromCharCode(65 + idx);
+        const chosenText = d.chosen === null
+          ? 'Skipped'
+          : `${letter(d.chosen)}. ${escapeHtml(d.item.options[d.chosen])}`;
+        const rightText = `${letter(d.item.answer)}. ${escapeHtml(d.item.options[d.item.answer])}`;
+        const status = d.isCorrect ? 'Correct' : 'Incorrect';
+        const color = d.isCorrect ? 'text-emerald-700' : 'text-rose-700';
+        return `<li class="rounded-lg border border-slate-200 bg-white p-3">
+          <p class="font-medium">Q${i + 1}: ${escapeHtml(d.item.q)}</p>
+          <p class="${color} mt-1">${status}</p>
+          <p class="mt-1">Your answer: ${chosenText}</p>
+          ${d.isCorrect ? '' : `<p>Correct answer: ${rightText}</p>`}
+        </li>`;
+      }).join('');
+
+      if (pct === 100) {
+        recommendations.innerHTML = `<li class="rounded-lg border border-slate-200 bg-white p-3">${escapeHtml(topics[selectedKey].nextStep)}</li>`;
+      } else {
+        const byTopic = new Map();
+        details.forEach((d) => {
+          const topic = d.item.topic;
+          if (!byTopic.has(topic)) {
+            byTopic.set(topic, { missed: false });
+          }
+          if (!d.isCorrect) byTopic.get(topic).missed = true;
+        });
+        recommendations.innerHTML = [...byTopic.entries()].map(([topic, info]) => {
+          const note = studyNotes[topic] || 'Review this topic and try the related questions again.';
+          const label = info.missed ? 'Review' : 'Refresh';
+          const color = info.missed ? 'text-rose-700' : 'text-slate-500';
+          return `<li class="rounded-lg border border-slate-200 bg-white p-3">
+            <p class="font-medium">${escapeHtml(topic)} <span class="${color} font-normal">· ${label}</span></p>
+            <p class="mt-1">${escapeHtml(note)}</p>
+          </li>`;
+        }).join('');
+      }
+
+      resultCard.classList.remove('hidden');
+      resultCard.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+
+    function escapeHtml(unsafe) {
+      return unsafe
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    (function init(){
+      showTopicSelect();
+
+      let touchStartX = 0;
+      let touchEndX = 0;
+      quizWrap.addEventListener('touchstart', (e)=>{ touchStartX = e.changedTouches[0].screenX; });
+      quizWrap.addEventListener('touchend', (e)=>{
+        if (!quiz.length) return;
+        touchEndX = e.changedTouches[0].screenX;
+        handleGesture();
+      });
+      function handleGesture(){
+        if (touchEndX + 40 < touchStartX) nextBtn.click();
+        if (touchEndX - 40 > touchStartX) prevBtn.click();
+      }
+
+      window.addEventListener('keydown', (e)=>{
+        if (!quiz.length) return;
+        if (e.key === 'ArrowRight') nextBtn.click();
+        if (e.key === 'ArrowLeft') prevBtn.click();
+      });
+    })();
+
+  </script>
+</body>
+</html>
